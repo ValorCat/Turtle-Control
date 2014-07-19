@@ -1,0 +1,225 @@
+-- Turtle Control (Standalone) by ValorCat; version 1.0a
+
+
+local sMode, bDetect = "mine", true
+
+-- all existing keybinds, prefix 'mode:' to change mode and 'func:' for special binds 
+local tBinds = {
+	a = "turtle.turnLeft()";
+	backslash = "func:modeUp";
+	backspace = "func:exit";
+	d = "turtle.turnRight()";
+	down = "turtle.back()";
+	e = "mode:suck";
+	enter = "func:modeAhead";
+	equals = "turtle.select(turtle.getSelectedSlot() + 1 > 16 and 1 or turtle.getSelectedSlot() + 1)";
+	h = "func:help";
+	left = "turtle.turnLeft()";
+	leftAlt = "turtle.equipLeft()";
+	leftShift = "turtle.down()";
+	m = "mode:mine";
+	minus = "turtle.select(turtle.getSelectedSlot() - 1 < 1 and 16 or turtle.getSelectedSlot() - 1)";
+	p = "mode:place";
+	q = "mode:drop";
+	r = "turtle.refuel()";
+	right = "turtle.turnRight()";
+	rightAlt = "turtle.equipRight()";
+	rightShift = "func:modeDown";
+	s = "turtle.back()";
+	space = "turtle.up()";
+	tab = "func:prompt";
+	up = "turtle.forward()";
+	w = "turtle.forward()";
+	x = "func:detect";
+	z = "mode:attack";
+}
+
+-- displayed on bind 'func:help', defaultly 'h'
+local tHelp = {
+	"movement: WASD or arrow keys";
+	"mode keys: \\, Enter, and RShift";
+	"switch modes: E, M, P, Q, and Z";
+	"switch slots: number keys or +/-";
+	"switch tools: LAlt and RAlt";
+	"execute function: Tab";
+	"toggle wall detection: X";
+	"exit program: Backspace";
+}
+
+-- the mode-specific functions
+local tSpecial = {
+	attack = {"attackUp", "attack", "attackDown"};
+	drop = {"dropUp", "drop", "dropDown"};
+	mine = {"digUp", "dig", "digDown"};
+	place = {"placeUp", "place", "placeDown"};
+	suck = {"suckUp", "suck", "suckDown"};
+}
+
+local tMoveFuncs = {"turtle.back", "turtle.down", "turtle.forward", "turtle.turnLeft", "turtle.turnRight", "turtle.up"}
+
+for nName, sName in ipairs({"one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "zero"}) do
+	tBinds[sName] = "turtle.select("..nName..")"
+end
+
+local function update()
+	local x, y = term.getCursorPos()
+	term.setCursorPos(1, 1)
+	if term.isColor() then
+		term.setBackgroundColor(colors.blue)
+		term.clearLine()
+	else
+		term.clearLine()
+	end
+	local sLine = (sMode and sMode.." mode | " or "")..(bDetect and "detecting | " or "")..(tostring(turtle.getFuelLevel()) or "?")
+	local sLineEnd = " / "..(tostring(turtle.getFuelLimit()) or "?")
+	local w, h = term.getSize()
+	write(sLine)
+	if #sLine + #sLineEnd + 5 <= w then
+		write(sLineEnd)
+	end
+	write(" fuel")
+	if term.isColor() then
+		term.setBackgroundColor(colors.black)
+	end
+	term.setCursorPos(x, y)
+end
+
+local function log(sType, sInfo)
+	sType, sInfo = sType or "", sInfo or ""
+	local x, y = term.getCursorPos()
+	if y == 1 then
+		term.setCursorPos(1, 2)
+	end
+	term.clearLine()
+	if term.isColor() then
+		term.setTextColor(colors.lime)
+		write(sType.."> ")
+		term.setTextColor(colors.white)
+		print(sInfo)
+	else
+		print(sType, "> ", sInfo)
+	end
+	update()
+end
+
+local tHistory = {}
+
+term.clear()
+term.setCursorPos(1, 2)
+for sKey, sCmd in pairs(tBinds) do
+	if sCmd == "func:help" then
+		log("help", "press "..sKey:sub(1, 1):upper()..sKey:sub(2).." for help")
+		break
+	end
+end
+while true do
+	local tEvent = {os.pullEvent("key")}
+	table.remove(tEvent, 1)
+	local sFunc = tBinds[keys.getName(tEvent[1])]
+
+	-- special functions
+	if type(sFunc) == "string" then
+		if sFunc:sub(1, 5) == "func:" then
+			local sCmd = sFunc:sub(6)
+			if sCmd == "prompt" then
+				term.clearLine()
+				if term.isColor() then
+					term.setTextColor(colors.lime)
+					write("turtle> ")
+					term.setTextColor(colors.white)
+				else
+					write("turtle> ")
+				end
+				local sRawInput = read(nil, tHistory)
+				if sRawInput ~= "" then
+					table.insert(tHistory, sRawInput)
+					local tParams = {}
+					for m in sRawInput:gmatch("%w+") do
+						table.insert(tParams, m)
+					end
+					for sName, sParam in ipairs(tParams) do
+						tParams[sName] = tonumber(sParam) or sParam
+					end
+					local sCommand = table.remove(tParams, 1)
+					local tFunc = {pcall(turtle[sCommand], unpack(tParams))}
+					if tFunc[1] then
+						if #tFunc > 1 then
+							table.remove(tFunc, 1)
+							for k, v in ipairs(tFunc) do
+								tFunc[k] = tonumber(v) or v
+								if v == true then
+									tFunc[k] = "true"
+								elseif v == false then
+									tFunc[k] = "false"
+								end
+							end
+							log("result", table.concat(tFunc, ", "))
+						end
+					else
+						log("error", tFunc[2]:gsub("%w+:%w+: ", ""))
+					end
+				end
+			elseif sCmd == "detect" then
+				bDetect = not bDetect
+				--log("detect", bDetect and "enabled" or "disabled")
+			elseif sCmd == "help" then
+				for sNode = 1, #tHelp - 1 do
+					log("help", tHelp[sNode])
+					sleep(1.5)
+				end
+				log("help", tHelp[#tHelp])
+			elseif sCmd == "modeAhead" then
+				turtle[tSpecial[sMode][2]]()
+			elseif sCmd == "modeUp" then
+				turtle[tSpecial[sMode][2]]()
+			elseif sCmd == "modeDown" then
+				turtle[tSpecial[sMode][2]]()
+			elseif sCmd == "exit" then
+				log("system", "terminated")
+				return
+			end
+
+		-- change mode
+		elseif sFunc:sub(1, 5) == "mode:" then
+			local sNewMode = sFunc:sub(6)
+			if tSpecial[sNewMode] then
+				sMode = sNewMode
+			end
+
+		-- custom function
+		else
+			local tFunc = {pcall(loadstring(sFunc))}
+			if tFunc[1] then
+				if #tFunc > 1 then
+					table.remove(tFunc, 1)
+					log("result", table.concat(tFunc, ", "))
+				end
+			else
+				log("error", tFunc[2]:gsub("%w+:%w+: ", ""))
+			end
+		end
+	
+		-- check for walls
+		local bMoved = false
+		for _, func in ipairs(tMoveFuncs) do
+			if sFunc:find(func.."("..".+"..")") then
+				bMoved = true
+				break
+			end
+		end
+		if bDetect and bMoved then
+			local tDetected = {ahead = turtle.detect(), up = turtle.detectUp(), down = turtle.detectDown()}
+			local tWalls = {}
+			for sDir, bWall in pairs(tDetected) do
+				if bWall then
+					table.insert(tWalls, string.upper(sDir))
+				end
+			end
+			if #tWalls > 0 then
+				log("detect", table.concat(tWalls, ", "))
+			end
+			bMoved = false
+		end
+	end
+	update()
+end
